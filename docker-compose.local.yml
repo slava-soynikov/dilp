@@ -1,0 +1,88 @@
+services:
+  db:
+    image: mysql:8
+    restart: unless-stopped
+    ports:
+      - "3306:3306"
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: dev
+    volumes:
+      - mysql_data_local:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-uroot", "-proot"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  cms_db:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: cms
+      POSTGRES_USER: cms
+      POSTGRES_PASSWORD: cms
+    volumes:
+      - cms_db_local:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "cms"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  cms:
+    build: ./cms_service
+    restart: unless-stopped
+    ports:
+      - "8055:8055"
+    environment:
+      DATABASE_URL: postgresql+psycopg2://cms:cms@cms_db:5432/cms
+      CMS_TOKEN: local-dev-cms-token-change-me
+      CMS_STORAGE_PATH: /data/attachments
+    depends_on:
+      cms_db:
+        condition: service_healthy
+    volumes:
+      - ./cms_service:/app
+      - cms_attachments_local:/data/attachments
+
+  backend:
+    build: ./backend
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    env_file:
+      - ./backend/.env
+    environment:
+      DATABASE_URL: mysql+pymysql://root:root@db:3306/dev
+      CMS_BASE_URL: http://cms:8055
+      CMS_TOKEN: local-dev-cms-token-change-me
+    depends_on:
+      db:
+        condition: service_healthy
+      cms:
+        condition: service_started
+    volumes:
+      - ./backend:/app
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+
+  frontend:
+    image: node:20-alpine
+    working_dir: /app
+    restart: unless-stopped
+    ports:
+      - "5173:5173"
+    environment:
+      VITE_API_PROXY_TARGET: http://backend:8000
+    depends_on:
+      - backend
+    volumes:
+      - ./frontend:/app
+      - frontend_node_modules:/app/node_modules
+    command: sh -c "npm install && npm run dev -- --host 0.0.0.0"
+
+volumes:
+  mysql_data_local:
+  cms_db_local:
+  cms_attachments_local:
+  frontend_node_modules:

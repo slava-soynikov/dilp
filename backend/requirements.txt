@@ -1,0 +1,16 @@
+fastapi
+uvicorn
+sqlalchemy
+alembic
+pymysql
+cryptography
+pydantic[email]
+pydantic-settings
+python-dotenv
+python-multipart
+argon2-cffi
+pyjwt
+slowapi
+pytest
+pytest-asyncio
+httpx
