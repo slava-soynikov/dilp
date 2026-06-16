@@ -1,0 +1,88 @@
+services:
+
+  db:
+    image: mysql:8
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-dev}
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-uroot", "-p${MYSQL_ROOT_PASSWORD:-root}"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+
+  cms_db:
+    image: postgres:16
+    restart: always
+    environment:
+      POSTGRES_DB: ${CMS_DB_NAME:-cms}
+      POSTGRES_USER: ${CMS_DB_USER:-cms}
+      POSTGRES_PASSWORD: ${CMS_DB_PASSWORD:?CMS_DB_PASSWORD must be set in .env}
+    volumes:
+      - cms_db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "${CMS_DB_USER:-cms}"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+
+  cms:
+    image: ghcr.io/edu4ua/dilp/cms:dev
+    restart: always
+    environment:
+      DATABASE_URL: postgresql+psycopg2://${CMS_DB_USER:-cms}:${CMS_DB_PASSWORD}@cms_db:5432/${CMS_DB_NAME:-cms}
+      CMS_TOKEN: ${CMS_TOKEN:?CMS_TOKEN must be set in .env}
+      CMS_STORAGE_PATH: /data/attachments
+    volumes:
+      - cms_attachments:/data/attachments
+    depends_on:
+      cms_db:
+        condition: service_healthy
+    # no Traefik labels — CMS is internal-only, backend talks to it on cms:8055
+
+  backend:
+    image: ghcr.io/edu4ua/dilp/backend:dev
+    restart: always
+    env_file:
+      - .env
+    depends_on:
+      db:
+        condition: service_healthy
+      cms:
+        condition: service_started
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.services.dev-backend.loadbalancer.server.port=8000"
+      # /api/* (плюс /docs, /openapi.json, /redoc) на том же хосте, что и фронт — same-origin, без CORS
+      - "traefik.http.routers.dev-backend.rule=Host(`${HOST_BASE:?HOST_BASE must be set in .env}`) && (PathPrefix(`/api`) || PathPrefix(`/docs`) || PathPrefix(`/openapi.json`) || PathPrefix(`/redoc`))"
+      - "traefik.http.routers.dev-backend.entrypoints=websecure"
+      - "traefik.http.routers.dev-backend.tls=true"
+      - "traefik.http.routers.dev-backend.tls.certresolver=letsencrypt"
+
+  frontend:
+    image: ghcr.io/edu4ua/dilp/frontend:dev
+    restart: always
+    depends_on:
+      - backend
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.services.dev-frontend.loadbalancer.server.port=80"
+      # HTTPS-роутер
+      - "traefik.http.routers.dev-frontend.rule=Host(`${HOST_BASE}`)"
+      - "traefik.http.routers.dev-frontend.entrypoints=websecure"
+      - "traefik.http.routers.dev-frontend.tls=true"
+      - "traefik.http.routers.dev-frontend.tls.certresolver=letsencrypt"
+      # HTTP→HTTPS redirect
+      - "traefik.http.routers.dev-frontend-http.rule=Host(`${HOST_BASE}`)"
+      - "traefik.http.routers.dev-frontend-http.entrypoints=web"
+      - "traefik.http.routers.dev-frontend-http.middlewares=https-redirect"
+      - "traefik.http.middlewares.https-redirect.redirectscheme.scheme=https"
+      - "traefik.http.middlewares.https-redirect.redirectscheme.permanent=true"
+
+volumes:
+  mysql_data:
+  cms_db_data:
+  cms_attachments:

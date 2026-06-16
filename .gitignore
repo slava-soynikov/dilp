@@ -1,0 +1,60 @@
+# --- IDE / Editors ---
+.vscode/settings.json
+.vcode/
+.idea/
+.project
+*.bak
+
+# --- Python ---
+.venv/
+venv/
+env/
+**/__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# --- Secrets / env ---
+.env
+.env.*
+!.env.example
+
+# --- Local databases / dumps ---
+*.db
+*.sqlite
+*.sqlite3
+*.sql.gz
+
+# --- Logs ---
+*.log
+logs/
+
+# --- OS ---
+.DS_Store
+Thumbs.db
+
+# --- Frontend ---
+frontend/node_modules
+frontend/package-lock.json
+
+# --- Build artifacts (vite outputs to ../app/dist/ per vite.config.ts) ---
+/app/
+
+# --- Planning & personal references (not part of source) ---
+/sprints.csv
+/Solution_Architecture_V1.pdf
+/frontend/DILP.html
+/frontend/Solution_Architecture_V1.pdf
+/test/
+/weekly_report.csv
+/EDU4UA.html
+
+# --- Playwright MCP scratch (snapshots/console logs from UI tests) ---
+.playwright-mcp/
+
+# --- Local manual-test screenshots ---
+/*.png
